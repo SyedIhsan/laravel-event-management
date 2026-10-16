@@ -1,59 +1,94 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Event Management API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> **For learning purposes only.** This is a practice project I built to learn how to create a
+> **REST API** with Laravel. It is not meant for production use.
 
-## About Laravel
+A simple API where users can create events and register as attendees. There is no frontend —
+every endpoint was tested with **Postman**.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## What I Learned
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **REST API with resource controllers** — `php artisan make:controller Api/EventController --api`
+  and `Route::apiResource()` to get the full CRUD routes (index, show, store, update, destroy) in one line.
+- **CRUD operations & data validation** — using `$request->validate()` with rules like
+  `required`, `nullable`, `date`, and `after:start_time`.
+- **API Resources** — `php artisan make:resource EventResource` to control exactly what the JSON
+  response looks like, instead of dumping the whole model.
+- **Pagination** — `->paginate()` on the query, which returns the data with `links` and `meta`.
+- **Relation loading** — a reusable `CanLoadRelationships` trait so the client decides what to load
+  with `?include=user,attendees`, using `whenLoaded()` in the resource to avoid N+1 queries.
+- **Nested resources** — `Route::apiResource('events.attendees', ...)->scoped()` so attendees are
+  always scoped to their parent event.
+- **Authentication with Sanctum** — issuing a token on login with `createToken()`.
+- **Protecting routes with tokens** — the `auth:sanctum` middleware on a route group, so reading
+  events is public but creating/updating/deleting needs a token.
+- **Automatically adding the token in Postman** — saving the token into a collection variable from
+  the login request's test script, so every other request sends it automatically.
+- **Revoking tokens on logout** — `$request->user()->tokens()->delete()`.
+- **Authorization with Gates and Policies** — started with `Gate::define()` closures, then moved to
+  `EventPolicy` / `AttendeePolicy` so only the owner can update or delete their event.
+- **Custom Artisan command** — `app:send-event-reminders` to find events starting in the next 24 hours.
+- **Task scheduling** — running that command daily from `routes/console.php`.
+- **Notifications & email sending** — `EventReminderNotification` with a `MailMessage`.
+- **Mailpit via Docker** — to catch and view the test emails locally instead of sending real ones.
+- **Queues** — the notification implements `ShouldQueue`, so emails are sent by a worker in the
+  background instead of blocking the request.
+- **Rate limiting** — a named `api` limiter (60 requests/minute, per user or IP) applied with the
+  `throttle:api` middleware.
+- **JSON error responses** — `shouldRenderJsonWhen()` in `bootstrap/app.php`, so API errors never
+  return an HTML page.
+- **Factories & seeders** — `EventFactory`, `EventSeeder`, and `AttendeeSeeder` for fake test data.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Endpoints
 
-## Learning Laravel
+| Method | Endpoint                             | Auth | Description              |
+| ------ | ------------------------------------ | ---- | ------------------------ |
+| POST   | `/api/login`                         | No   | Get an API token         |
+| POST   | `/api/logout`                        | Yes  | Revoke all tokens        |
+| GET    | `/api/user`                          | Yes  | Current user             |
+| GET    | `/api/events`                        | No   | List events (paginated)  |
+| GET    | `/api/events/{id}`                   | No   | Show one event           |
+| POST   | `/api/events`                        | Yes  | Create an event          |
+| PUT    | `/api/events/{id}`                   | Yes  | Update own event         |
+| DELETE | `/api/events/{id}`                   | Yes  | Delete own event         |
+| GET    | `/api/events/{id}/attendees`         | No   | List attendees           |
+| GET    | `/api/events/{id}/attendees/{id}`    | No   | Show one attendee        |
+| POST   | `/api/events/{id}/attendees`         | Yes  | Join an event            |
+| DELETE | `/api/events/{id}/attendees/{id}`    | Yes  | Remove an attendee       |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Add `?include=user,attendees,attendees.user` to any event endpoint to load relationships.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Setup
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```sh
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan serve
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Run the queue worker in another terminal so notifications actually get sent:
 
-## Contributing
+```sh
+php artisan queue:work
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+For email testing, run Mailpit with Docker and point the mail config at it
+(`MAIL_MAILER=smtp`, `MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`):
 
-## Code of Conduct
+```sh
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Then open <http://localhost:8025> to read the emails.
 
-## Security Vulnerabilities
+To trigger the reminder command manually:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```sh
+php artisan app:send-event-reminders
+```
 
-## License
+## Built With
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# laravel-event-management
+Laravel 13 · Laravel Sanctum · SQLite · Postman · Mailpit (Docker)
